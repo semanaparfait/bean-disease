@@ -1,0 +1,10 @@
+.venv/
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+data/uploads/
+data/raw/
+data/*.db
+models/archive/
+*.zip
+.DS_Store

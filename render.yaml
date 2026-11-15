@@ -1,0 +1,23 @@
+# Render Blueprint: New > Blueprint > select this repo
+services:
+  - type: web
+    name: bean-disease-api
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: AUTO_RETRAIN
+        value: "true"
+      - key: RETRAIN_THRESHOLD
+        value: "30"
+      - key: REPLAY_PER_CLASS
+        value: "30"
+  - type: web
+    name: bean-disease-ui
+    runtime: docker
+    dockerfilePath: ./Dockerfile.ui
+    plan: free
+    envVars:
+      - key: API_URL          # set to the API's public URL, e.g. https://bean-disease-api.onrender.com
+        sync: false

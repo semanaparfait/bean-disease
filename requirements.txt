@@ -1,0 +1,9 @@
+# Full local environment (Python 3.11): API + UI + notebook + load testing
+-r requirements-api.txt
+-r requirements-ui.txt
+seaborn>=0.13
+jupyter
+nbconvert
+ipykernel
+locust>=2.30
+tabulate

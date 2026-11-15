@@ -1,0 +1,9 @@
+# UI service: Streamlit dashboard (talks to the API over HTTP)
+FROM python:3.11-slim
+ENV PYTHONUNBUFFERED=1 PORT=8501 API_URL=http://localhost:8000
+WORKDIR /app
+COPY requirements-ui.txt .
+RUN pip install --no-cache-dir -r requirements-ui.txt
+COPY ui ./ui
+EXPOSE 8501
+CMD ["sh", "-c", "streamlit run ui/app.py --server.port ${PORT} --server.address 0.0.0.0 --server.headless true --browser.gatherUsageStats false"]
