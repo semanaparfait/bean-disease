@@ -1,4 +1,4 @@
-# 🌱 Bean Leaf Disease Classifier — End-to-End ML Pipeline
+# Bean Leaf Disease Classifier — End-to-End ML Pipeline
 
 An MLOps pipeline that diagnoses **bean leaf diseases from a phone photo**. It covers data acquisition and
 preprocessing, a transfer-learning CNN, evaluation, a FastAPI service, a Streamlit dashboard, bulk data upload
@@ -6,11 +6,11 @@ with retraining triggers, Docker/cloud deployment and load testing with Locust.
 
 | | |
 |---|---|
-| 🎥 **Video demo** | _YouTube link — add here_ |
-| 🌐 **Web app (UI)** | _https://bean-disease-ui.onrender.com — add your URL_ |
-| ⚙️ **API + Swagger docs** | _https://bean-disease-api.onrender.com/docs — add your URL_ |
-| 📓 **Notebook** | [notebook/bean_disease_classification.ipynb](notebook/bean_disease_classification.ipynb) |
-| 🧠 **Model file** | [models/bean_disease_mobilenetv2.h5](models/bean_disease_mobilenetv2.h5) |
+|  **Video demo** | _YouTube link — add here_ |
+| **Web app (UI)** | _https://bean-disease-ui.onrender.com — add your URL_ |
+| **API + Swagger docs** | _https://bean-disease-api.onrender.com/docs — add your URL_ |
+| **Notebook** | [notebook/bean_disease_classification.ipynb](notebook/bean_disease_classification.ipynb) |
+|  **Model file** | [models/bean_disease_mobilenetv2.h5](models/bean_disease_mobilenetv2.h5) |
 
 ---
 
