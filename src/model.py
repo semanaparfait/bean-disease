@@ -1,15 +1,16 @@
 """Model creation, training, evaluation and retraining.
 
-Model: MobileNetV2 (ImageNet weights) as a frozen feature extractor + a regularised
-classification head, trained in two phases (head only, then fine-tuning the top of
-the backbone). Optimisation techniques used:
-  * transfer learning from a pretrained network
-  * data augmentation (flip / rotation / zoom / contrast) inside the model
-  * Dropout + L2 weight regularisation on the classifier head
+Model: a custom convolutional neural network built and trained from scratch (random
+initialisation, no ImageNet / pretrained weights). Optimisation techniques used:
+  * data augmentation (flip / rotation / zoom / translation / contrast) inside the model
+  * Batch Normalisation after every convolution (faster, more stable training)
+  * L2 weight regularisation on every convolution and the output layer
+  * Dropout (light after each conv block, stronger before the classifier)
+  * Global Average Pooling instead of a large Flatten + Dense (far fewer parameters)
   * Adam optimiser, EarlyStopping (restore best weights) and ReduceLROnPlateau
 
-Retraining loads the *custom trained model* (models/bean_disease_mobilenetv2.h5) as
-the pretrained starting point and fine-tunes it on newly uploaded data mixed with a
+Retraining loads the *custom trained model* (models/bean_disease_cnn.h5) as the
+pretrained starting point and fine-tunes it on newly uploaded data mixed with a
 replay sample of the original training set. The new model is only promoted to
 production if it does not perform worse on the held-out test set.
 """
@@ -42,40 +43,53 @@ retrain_lock = threading.Lock()
 
 
 # ---------------------------------------------------------------- model creation
-def build_model(img_size: int = C.IMG_SIZE, dropout: float = 0.3, l2: float = 1e-4, weights="imagenet"):
+CONV_BLOCKS = [(64, 2), (128, 2), (256, 2)]   # (filters, separable convolutions) per block
+# Keras default BN momentum (0.99) is far too slow with only ~32 batches per epoch: the running variance
+# stays near its initial value 1.0, so in inference mode every layer shrinks the signal and the model
+# predicts one class. 0.9 lets the running statistics catch up within the first epochs.
+BN_MOMENTUM = 0.9
+
+
+def build_model(img_size: int = C.IMG_SIZE, dropout: float = 0.4, block_dropout: float = 0.1, l2: float = 1e-4):
+    """Custom CNN, randomly initialised (trained from scratch).
+
+    A strided 3x3 "stem" convolution halves the resolution first, then three blocks of
+    depthwise-separable convolutions (much cheaper than standard convolutions, so the model
+    trains on a laptop CPU and serves fast on a small cloud instance).
+    """
+    reg = keras.regularizers.l2(l2)
     augment = keras.Sequential([
         layers.RandomFlip("horizontal_and_vertical"),
         layers.RandomRotation(0.15),
         layers.RandomZoom(0.15),
+        layers.RandomTranslation(0.1, 0.1),
         layers.RandomContrast(0.15),
     ], name="augmentation")
 
-    base = keras.applications.MobileNetV2(input_shape=(img_size, img_size, 3),
-                                          include_top=False, weights=weights)
-    base.trainable = False
-
     inputs = keras.Input(shape=(img_size, img_size, 3), name="image")
     x = augment(inputs)
-    x = layers.Rescaling(1.0 / 127.5, offset=-1.0, name="mobilenet_scaling")(x)
-    x = base(x, training=False)          # keep BatchNorm in inference mode even when fine-tuning
-    x = layers.GlobalAveragePooling2D()(x)
-    x = layers.Dropout(dropout)(x)
-    outputs = layers.Dense(len(C.CLASS_NAMES), activation="softmax",
-                           kernel_regularizer=keras.regularizers.l2(l2), name="predictions")(x)
-    return keras.Model(inputs, outputs, name="bean_disease_classifier")
+    x = layers.Rescaling(1.0 / 255, name="scaling")(x)          # [0, 255] -> [0, 1]
+    x = layers.Conv2D(32, 3, strides=2, padding="same", use_bias=False, kernel_regularizer=reg, name="stem_conv")(x)
+    x = layers.BatchNormalization(momentum=BN_MOMENTUM, name="stem_bn")(x)
+    x = layers.ReLU(name="stem_relu")(x)
+    for b, (filters, n_convs) in enumerate(CONV_BLOCKS, start=1):
+        for c in range(1, n_convs + 1):
+            x = layers.SeparableConv2D(filters, 3, padding="same", use_bias=False, pointwise_regularizer=reg,
+                                       name=f"block{b}_sepconv{c}")(x)
+            x = layers.BatchNormalization(momentum=BN_MOMENTUM, name=f"block{b}_bn{c}")(x)
+            x = layers.ReLU(name=f"block{b}_relu{c}")(x)
+        x = layers.MaxPooling2D(name=f"block{b}_pool")(x)
+        x = layers.Dropout(block_dropout, name=f"block{b}_dropout")(x)
+    x = layers.GlobalAveragePooling2D(name="gap")(x)
+    x = layers.Dropout(dropout, name="head_dropout")(x)
+    outputs = layers.Dense(len(C.CLASS_NAMES), activation="softmax", kernel_regularizer=reg,
+                           name="predictions")(x)
+    return keras.Model(inputs, outputs, name="bean_disease_cnn")
 
 
-def get_backbone(model):
-    return next(l for l in model.layers if isinstance(l, keras.Model))
-
-
-def unfreeze_top(model, n_layers: int = 30):
-    """Unfreeze the last n backbone layers (BatchNorm layers stay frozen)."""
-    base = get_backbone(model)
-    base.trainable = True
-    for layer in base.layers[:-n_layers]:
-        layer.trainable = False
-    for layer in base.layers:
+def freeze_batchnorm(model):
+    """Keep BatchNorm statistics fixed while fine-tuning on a small batch of new data."""
+    for layer in model.layers:
         if isinstance(layer, layers.BatchNormalization):
             layer.trainable = False
 
@@ -88,10 +102,10 @@ def compile_model(model, lr: float):
     )
 
 
-def callbacks(patience: int = 4):
+def callbacks(patience: int = 12, lr_patience: int = 4):
     return [
         keras.callbacks.EarlyStopping(monitor="val_loss", patience=patience, restore_best_weights=True),
-        keras.callbacks.ReduceLROnPlateau(monitor="val_loss", factor=0.3, patience=2, min_lr=1e-7),
+        keras.callbacks.ReduceLROnPlateau(monitor="val_loss", factor=0.5, patience=lr_patience, min_lr=1e-6),
     ]
 
 
@@ -123,7 +137,7 @@ def save_model(model, metrics: dict, extra: dict | None = None) -> str:
     version = datetime.now(timezone.utc).strftime("v%Y%m%d-%H%M%S")
     # Re-create a clean copy of the architecture and copy the weights over: models loaded from legacy .h5
     # cannot always be re-serialised to .h5 by Keras 3 ("cannot pickle 'module' object").
-    clean = build_model(weights=None)
+    clean = build_model()
     clean.set_weights(model.get_weights())
     tmp = C.MODEL_PATH.with_suffix(".tmp.h5")
     clean.save(tmp)                       # write to a temp file first so a failed save never corrupts production
@@ -146,8 +160,8 @@ def load_model(path: Path = C.MODEL_PATH):
 
 
 # ---------------------------------------------------------------- full offline training
-def train(head_epochs: int = 15, fine_tune_epochs: int = 10, verbose: int = 2):
-    """Train from scratch on data/train (used by the notebook / CLI). Returns model, histories, metrics."""
+def train(epochs: int = C.TRAIN_EPOCHS, verbose: int = 2):
+    """Train the custom CNN from scratch on data/train (used by the CLI). Returns model, history, metrics."""
     items = pp.list_images(C.TRAIN_DIR)
     train_items, val_items = pp.stratified_split(items)
     X_tr, y_tr = pp.load_arrays(train_items)
@@ -157,16 +171,12 @@ def train(head_epochs: int = 15, fine_tune_epochs: int = 10, verbose: int = 2):
 
     model = build_model()
     compile_model(model, 1e-3)
-    h1 = model.fit(ds_tr, validation_data=ds_val, epochs=head_epochs, callbacks=callbacks(), verbose=verbose)
-
-    unfreeze_top(model, 30)
-    compile_model(model, 1e-5)
-    h2 = model.fit(ds_tr, validation_data=ds_val, epochs=fine_tune_epochs, callbacks=callbacks(), verbose=verbose)
+    hist = model.fit(ds_tr, validation_data=ds_val, epochs=epochs, callbacks=callbacks(), verbose=verbose)
 
     X_te, y_te = load_test_set()
     metrics = evaluate(model, X_te, y_te)
     save_model(model, metrics, {"trigger": "initial_training", "n_train_images": len(items)})
-    return model, (h1.history, h2.history), metrics
+    return model, hist.history, metrics
 
 
 # ---------------------------------------------------------------- retraining
@@ -201,15 +211,15 @@ def retrain(trigger: str = "manual", epochs: int = C.RETRAIN_EPOCHS, run_id: int
         X_tr, y_tr = pp.load_arrays(train_items)
         X_val, y_val = pp.load_arrays(val_items)
 
-        # 3. existing model as pretrained model -> fine-tune with a low learning rate
+        # 3. existing custom model as the pretrained model -> fine-tune with a low learning rate
         model = load_model()
-        unfreeze_top(model, 30)
-        compile_model(model, 1e-5)
+        freeze_batchnorm(model)
+        compile_model(model, 1e-4)
         X_te, y_te = load_test_set()
         before = evaluate(model, X_te, y_te)
         hist = model.fit(pp.make_dataset(X_tr, y_tr, batch_size=16, shuffle=True),
                          validation_data=pp.make_dataset(X_val, y_val, batch_size=16),
-                         epochs=epochs, callbacks=callbacks(patience=2),
+                         epochs=epochs, callbacks=callbacks(patience=2, lr_patience=1),
                          class_weight=pp.class_weights(y_tr), verbose=2)
 
         # 4. evaluate and decide

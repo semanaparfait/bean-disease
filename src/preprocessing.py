@@ -3,8 +3,8 @@
 Steps applied to every image (training, uploaded retraining data and prediction input):
   1. decode the file and force 3-channel RGB (drops alpha / converts greyscale)
   2. resize to IMG_SIZE x IMG_SIZE (bilinear)
-  3. keep pixel values as float32 in [0, 255]; the model itself rescales to [-1, 1]
-     (MobileNetV2 convention) so the exact same function serves train and inference
+  3. keep pixel values as float32 in [0, 255]; rescaling to [0, 1] happens
+     inside the model, so the exact same function serves train and inference
 Training additionally uses random augmentation layers that live inside the model
 (active only while training).
 """

@@ -190,7 +190,7 @@ elif page == "Data insights":
     density("edge_density", "Share of strong-gradient pixels", "edge density")
     st.markdown("**Interpretation:** texture is almost identical across classes (≈ 14–15 %) because field photos "
                 "include soil, veins and other leaves. Global statistics cannot separate the two diseases, so the "
-                "model must learn the *shape* of the lesions, which is why a convolutional network (MobileNetV2) "
+                "model must learn the *shape* of the lesions, which is why a convolutional network (a custom CNN trained from scratch) "
                 "is used.")
 
     st.subheader("Putting it together")
