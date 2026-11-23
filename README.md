@@ -100,7 +100,7 @@ classic model on summary features.
 ## 3. Repository structure
 
 ```
-ml_pipeline_summative/
+bean-disease/
 ├── README.md
 ├── notebook/
 │   └── bean_disease_classification.ipynb   # preprocessing, training, evaluation, prediction
@@ -136,7 +136,7 @@ ml_pipeline_summative/
 TensorFlow 2.18 requires Python 3.9–3.12.
 
 ```bash
-git clone <https://github.com/semanaparfait/bean-disease.git> && cd ml_pipeline_summative
+git clone https://github.com/semanaparfait/bean-disease.git && cd bean-disease
 python -m venv .venv
 # Windows: .venv\Scripts\activate      macOS/Linux: source .venv/bin/activate
 pip install -r requirements.txt
