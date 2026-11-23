@@ -136,7 +136,7 @@ ml_pipeline_summative/
 TensorFlow 2.18 requires Python 3.9–3.12.
 
 ```bash
-git clone <your-repo-url> && cd ml_pipeline_summative
+git clone <https://github.com/semanaparfait/bean-disease.git> && cd ml_pipeline_summative
 python -m venv .venv
 # Windows: .venv\Scripts\activate      macOS/Linux: source .venv/bin/activate
 pip install -r requirements.txt
