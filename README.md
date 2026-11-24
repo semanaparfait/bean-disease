@@ -1,7 +1,7 @@
 # Bean Leaf Disease Classifier — End-to-End ML Pipeline
 
 An MLOps pipeline that diagnoses **bean leaf diseases from a phone photo**. It covers data acquisition and
-preprocessing, a transfer-learning CNN, evaluation, a FastAPI service, a Streamlit dashboard, bulk data upload
+preprocessing, a custom CNN trained from scratch, evaluation, a FastAPI service, a Streamlit dashboard, bulk data upload
 with retraining triggers, Docker/cloud deployment and load testing with Locust.
 
 | | |
@@ -10,7 +10,7 @@ with retraining triggers, Docker/cloud deployment and load testing with Locust.
 | **Web app (UI)** | _https://bean-disease-ui.onrender.com_ |
 | **API + Swagger docs** | _https://bean-disease-api.onrender.com/docs_ |
 | **Notebook** | [notebook/bean_disease_classification.ipynb](notebook/bean_disease_classification.ipynb) |
-|  **Model file** | [models/bean_disease_mobilenetv2.h5](models/bean_disease_mobilenetv2.h5) |
+|  **Model file** | [models/bean_disease_cnn.h5](models/bean_disease_cnn.h5) |
 
 ---
 
@@ -23,26 +23,30 @@ instant diagnosis with advice. The system also keeps improving: new labelled pho
 model retrained from the dashboard.
 
 **Dataset:** [iBeans](https://github.com/AI-Lab-Makerere/ibean) from the Makerere AI Lab (Uganda). It contains
-1,296 smartphone field images (500×500) in 3 balanced classes: `angular_leaf_spot`, `bean_rust` and `healthy`.
-1,168 images are used for train/validation and 128 are held out for testing.
+1,295 smartphone field images (500×500) in 3 balanced classes: `angular_leaf_spot`, `bean_rust` and `healthy`.
+1,167 images are used for train/validation (85/15 stratified split) and 128 are held out for testing.
 
-**Model:** MobileNetV2 pretrained on ImageNet, with an augmentation + Dropout + L2 classification head. It is
-trained in two phases (head first, then fine-tuning the top 30 layers) using Adam, EarlyStopping and
-ReduceLROnPlateau. A vanilla CNN baseline is trained for comparison.
+**Model:** a custom CNN trained **from scratch** (no pretrained weights, about 140k parameters). It has a strided
+stem convolution, three depthwise-separable convolution blocks (64 → 128 → 256 filters) with Batch
+Normalisation, Global Average Pooling and a softmax classifier. Optimisation: data augmentation (flip, rotation,
+zoom, translation, contrast), Dropout, L2 regularisation, the Adam optimiser (lr 1e-3), EarlyStopping
+(patience 12, restore best weights) and ReduceLROnPlateau. Training ran for 56 epochs; the best weights are from
+epoch 44. A vanilla CNN baseline (plain convolutions, SGD, no regularisation) is trained for comparison.
 
 ### Results (held-out test set, 128 images)
 
-| Metric | Baseline CNN (vanilla, SGD) | **MobileNetV2 (optimised)** |
+| Metric | Baseline CNN (vanilla, SGD) | **Custom CNN (optimised, from scratch)** |
 |---|---|---|
-| Accuracy | 0.383 | **0.891** |
-| Loss (cross-entropy) | 1.673 | **0.339** |
-| Precision (macro) | 0.451 | **0.891** |
-| Recall (macro) | 0.381 | **0.891** |
-| F1-score (macro) | 0.257 | **0.891** |
-| ROC-AUC (macro, one-vs-rest) | 0.816 | **0.964** |
+| Accuracy | 0.383 | **0.930** |
+| Loss (cross-entropy) | 1.648 | **0.207** |
+| Precision (macro) | 0.451 | **0.930** |
+| Recall (macro) | 0.381 | **0.930** |
+| F1-score (macro) | 0.257 | **0.930** |
+| ROC-AUC (macro, one-vs-rest) | 0.817 | **0.986** |
 
-Per class (F1): healthy 0.95 · angular leaf spot 0.87 · bean rust 0.85. 10 of the 14 test errors are
-confusions between the two diseases.
+Per class (F1): angular leaf spot 0.94 · healthy 0.94 · bean rust 0.91. Of the 9 test errors, 4 are
+confusions between the two diseases, 3 are diseased leaves predicted healthy and 2 are healthy leaves flagged as
+bean rust.
 
 ### Data insights (3 interpreted features)
 
@@ -86,8 +90,8 @@ classic model on summary features.
 2. **Preprocessing.** Uploaded images go through the same `load_image` pipeline as training (EXIF fix → RGB →
    160×160). They are mixed with a replay sample of the original training data to prevent catastrophic
    forgetting, and the classes are weighted.
-3. **Retraining from the custom pretrained model.** The current production `bean_disease_mobilenetv2.h5` is
-   loaded and fine-tuned (lr 1e-5, early stopping).
+3. **Retraining from the custom pretrained model.** The current production `bean_disease_cnn.h5` (the custom
+   CNN trained from scratch) is loaded and fine-tuned (Adam lr 1e-4, BatchNorm statistics frozen, early stopping).
 4. **Evaluation and promotion.** The new model is scored on the fixed test set and replaces the production model
    only if its accuracy doesn't drop by more than 2 points. The old model is archived in `models/archive/` and the
    API hot-reloads the new one with no downtime.
@@ -117,8 +121,8 @@ bean-disease/
 │   ├── test/<class>/       # held-out test images
 │   └── image_features.csv  # extracted features for visualisations
 ├── models/
-│   ├── bean_disease_mobilenetv2.h5
-│   └── metrics.json
+│   ├── bean_disease_cnn.h5   # production model (custom CNN)
+│   └── metrics.json          # version + test metrics of the production model
 ├── locust/locustfile.py    # load test
 ├── scripts/                # load-test runner + summariser
 ├── Dockerfile              # API image
