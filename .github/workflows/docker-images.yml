@@ -1,0 +1,40 @@
+# Builds the API and UI Docker images on every push to main and publishes them to GitHub Container Registry.
+# Azure App Service pulls them from:
+#   ghcr.io/<owner>/bean-disease-api:latest
+#   ghcr.io/<owner>/bean-disease-ui:latest
+name: Build Docker images
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - name: api
+            dockerfile: Dockerfile
+          - name: ui
+            dockerfile: Dockerfile.ui
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          push: true
+          tags: ghcr.io/${{ github.repository_owner }}/bean-disease-${{ matrix.name }}:latest
