@@ -112,6 +112,18 @@ def callbacks(patience: int = 12, lr_patience: int = 4):
 # ---------------------------------------------------------------- evaluation
 def evaluate(model, X: np.ndarray, y: np.ndarray) -> dict:
     probs = model.predict(pp.make_dataset(X, y), verbose=0)
+    return metrics_from_probs(y, probs)
+
+
+def evaluate_low_memory(model, items) -> dict:
+    """Evaluate one image at a time (same path as /predict). Batched evaluation needs ~200 MB extra RAM,
+    which gets the API killed on 512 MB hosts such as Render's free tier."""
+    y = np.array([label for _, label in items])
+    probs = np.stack([model(pp.load_image(path)[None, ...], training=False).numpy()[0] for path, _ in items])
+    return metrics_from_probs(y, probs)
+
+
+def metrics_from_probs(y: np.ndarray, probs: np.ndarray) -> dict:
     pred = probs.argmax(1)
     y_onehot = np.eye(len(C.CLASS_NAMES))[y]
     return {

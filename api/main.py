@@ -228,10 +228,9 @@ def evaluate_production_model():
     """Evaluate the model currently serving traffic on the held-out test set (live, in production)."""
     if not predictor.ready:
         raise HTTPException(503, "Model not loaded")
-    from src.model import evaluate, load_test_set
+    from src.model import evaluate_low_memory
     t0 = time.time()
-    X, y = load_test_set()
-    m = evaluate(predictor.model, X, y)
+    m = evaluate_low_memory(predictor.model, pp.list_images(C.TEST_DIR))
     m["model_version"] = predictor.version
     m["duration_s"] = round(time.time() - t0, 1)
     return m
