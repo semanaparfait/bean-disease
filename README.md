@@ -173,9 +173,10 @@ docker compose restart lb               # make nginx pick up the new replicas
 
 > Free-tier notes: services sleep after 15 minutes of inactivity, so the first request can take about a minute.
 > The disk is ephemeral, so uploads, the SQLite database and retrained models reset when the service restarts.
-> Attach a Render persistent disk to keep them. Free instances have 512 MB RAM, which is enough for prediction
-> and light retraining (`REPLAY_PER_CLASS=30` keeps retraining memory low). Use the Starter plan if retraining
-> gets OOM-killed.
+> Attach a Render persistent disk to keep them. Free instances have 512 MB RAM: the API uses about 450 MB idle,
+> so prediction and live evaluation (which scores one image at a time) fit, but **retraining needs about 850 MB
+> and gets the free instance killed**. Run retraining locally or with Docker, or use an instance with at least
+> 1 GB of RAM (Render Standard, 2 GB).
 
 ---
 

@@ -260,17 +260,31 @@ elif page == "Upload & retrain":
     run_id = st.session_state.get("run_id")
     if run_id:
         box = st.empty()
+        failures = 0
         with st.spinner(f"Retraining (run {run_id}) — this can take a few minutes..."):
             while True:
-                run, _ = api("GET", f"/retrain/status/{run_id}")
+                run, code = api("GET", f"/retrain/status/{run_id}")
+                if code != 200:                       # API unreachable or run lost: retry for ~1 min
+                    failures += 1
+                    if failures >= 15:
+                        break
+                    box.warning(f"Run {run_id}: waiting for the API to respond ({failures}/15) ...")
+                    time.sleep(4)
+                    continue
+                failures = 0
                 if run.get("status") != "running":
                     break
                 box.info(f"Run {run_id} running since {run.get('started_at')} ...")
                 time.sleep(4)
         box.empty()
         st.session_state.pop("run_id")
-        (st.success if run.get("status") == "completed" else st.warning)(
-            f"Run {run_id}: {run.get('status')} — {run.get('message')}")
+        if code != 200:
+            st.error(f"Run {run_id} was lost: the API stopped responding or restarted during retraining. "
+                     "Training needs about 850 MB of RAM, so hosts with 512 MB (such as Render's free tier) "
+                     "kill the server. Run retraining locally or on an instance with at least 1 GB of RAM.")
+        else:
+            (st.success if run.get("status") == "completed" else st.warning)(
+                f"Run {run_id}: {run.get('status')} — {run.get('message')}")
         if run.get("metrics"):
             m = run["metrics"]
             cols = st.columns(5)
