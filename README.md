@@ -207,18 +207,19 @@ locust -f locust/locustfile.py --host http://localhost:8000   # → http://local
 
 | Replicas | Requests | Failures | Avg (ms) | Median (ms) | p95 (ms) | p99 (ms) | Throughput (req/s) |
 |---:|---:|---:|---:|---:|---:|---:|---:|
-| 1 | 167 | 0 | 8,264 | 8,200 | 10,000 | 10,000 | 2.88 |
-| 2 | 274 | 0 | 4,879 | 4,900 | 5,900 | 6,900 | 4.56 |
-| 3 | 361 | 0 | 3,660 | 3,500 | 5,900 | 8,000 | 5.97 |
+| 1 | 252 | 0 | 4,949 | 5,100 | 8,400 | 8,900 | 4.50 |
+| 2 | 630 | 0 | 1,572 | 1,400 | 3,200 | 5,700 | 10.45 |
+| 3 | 606 | 0 | 1,681 | 1,200 | 4,900 | 6,100 | 10.08 |
 
 ![latency chart](locust/results/latency.png)
 
-**Interpretation.** A single prediction takes about 300 ms when the server is idle. Under a flood of 30
-concurrent users, one replica saturates and requests queue, so the median response time grows to about 8 s.
-Adding replicas spreads the queue: going from 1 to 3 replicas **doubles throughput (2.9 → 6.0 req/s) and cuts
-median latency by 57 % (8.2 s → 3.5 s)**, with zero failed requests. Gains shrink after 2 replicas because the
-test machine has only 2 physical CPU cores, which all replicas and the Locust client share. On a cloud host with
-one CPU per container, scaling would stay closer to linear.
+**Interpretation.** A single prediction takes about 70–100 ms when the server is idle. Under a flood of 30
+concurrent users, one replica saturates and requests queue, so the median response time grows to about 5 s.
+Adding a second replica spreads the queue: **throughput rises 2.3× (4.5 → 10.5 req/s) and median latency drops
+by 73 % (5.1 s → 1.4 s)**, with zero failed requests in every run. A third replica brings no further gain
+(10.1 req/s, median 1.2 s but a worse p95) because the test machine has only 2 physical CPU cores, which all
+replicas and the Locust client share: once both cores are busy, an extra replica only adds competition for them.
+On a cloud host with one CPU per container, scaling would continue further.
 
 > These numbers were measured locally on an Intel i5-7200U (2 cores / 4 threads, 8 GB RAM), with each replica
 > running as an independent uvicorn worker process holding its own copy of the model

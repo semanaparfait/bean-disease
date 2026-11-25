@@ -13,7 +13,6 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 PY = sys.executable
-LOCUST = str(Path(PY).with_name("locust.exe" if os.name == "nt" else "locust"))
 USERS = sys.argv[1] if len(sys.argv) > 1 else "30"
 DURATION = sys.argv[2] if len(sys.argv) > 2 else "60s"
 PORT = 8001
@@ -41,7 +40,7 @@ for n in (1, 2, 3):
     try:
         wait_ready()
         time.sleep(20 * n)  # let every worker finish loading the model
-        subprocess.run([LOCUST, "-f", "locust/locustfile.py", "--host", f"http://localhost:{PORT}", "--headless",
+        subprocess.run([PY, "-m", "locust", "-f", "locust/locustfile.py", "--host", f"http://localhost:{PORT}", "--headless",
                         "-u", USERS, "-r", "5", "-t", DURATION, "--csv", str(RES / f"local_{n}_workers"),
                         "--only-summary"], cwd=ROOT, check=False)
     finally:
