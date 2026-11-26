@@ -7,8 +7,8 @@ with retraining triggers, Docker/cloud deployment and load testing with Locust.
 | | |
 |---|---|
 |  **Video demo** | _YouTube link — add here_ |
-| **Web app (UI)** | _https://bean-disease-ui.onrender.com_ |
-| **API + Swagger docs** | _https://bean-disease-api.onrender.com/docs_ |
+| **Web app (UI)** | https://bean-disease-ui.onrender.com (Render) |
+| **API + Swagger docs** | https://bean-disease-api-c7f7e4ezcvbccae0.southafricanorth-01.azurewebsites.net/docs (Azure App Service) |
 | **Notebook** | [notebook/bean_disease_classification.ipynb](notebook/bean_disease_classification.ipynb) |
 |  **Model file** | [models/bean_disease_cnn.h5](models/bean_disease_cnn.h5) |
 
@@ -225,3 +225,28 @@ On a cloud host with one CPU per container, scaling would continue further.
 > running as an independent uvicorn worker process holding its own copy of the model
 > (`python scripts/run_load_tests_local.py 30 60s`). To repeat the test with real Docker containers behind the
 > nginx load balancer, run `bash scripts/run_load_tests.sh 30 60s`. Raw Locust CSVs are in `locust/results/`.
+
+---
+
+## 7. Known limitations
+
+* **The model cannot say "this is not a bean leaf".** It was trained on three classes only (angular leaf spot,
+  bean rust, healthy), and its softmax output always splits 100 % between them. Any image (a building, a
+  person, another plant) is therefore forced into one of the three classes, often with high confidence. For
+  example, a photo of a hotel with brown wooden furniture was predicted as *bean rust* with 92 % confidence,
+  because brown/orange areas resemble rust lesions. The confidence score means "the best of these three
+  options", not "this is certainly a diseased bean leaf". **Users should only upload photos of a single bean
+  leaf.** A planned improvement is an out-of-distribution check before predicting: compare the image's internal
+  CNN features with those of the training leaves (e.g. Mahalanobis distance on the global-average-pooling
+  features) and reply "this does not look like a bean leaf" when the image is too different, or add a fourth
+  "not a bean leaf" class trained on unrelated images.
+* **Retraining with very few images is noisy.** Promotion allows a drop of up to 2 accuracy points, so a run
+  trained on a handful of uploads can replace the model with a slightly weaker one (e.g. 0.930 → 0.914 with one
+  uploaded image). Uploading at least a few images per class gives more reliable runs.
+* **Storage is not persistent in the cloud.** Uploaded images, the SQLite database and retrained models live on
+  the container's disk and are reset when the service restarts or is redeployed, which returns the API to the
+  model stored in the repository.
+* **Memory.** Retraining needs about 850 MB of RAM, so it cannot run on 512 MB hosts such as Render's free tier;
+  the API is therefore hosted on Azure App Service (Basic B1, 1.75 GB).
+* **Load test hardware.** The Locust results above come from a 2-core laptop, which limits scaling beyond two
+  replicas.
