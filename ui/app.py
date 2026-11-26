@@ -131,10 +131,10 @@ elif page == "Predict":
                                       "Probability": list(res["probabilities"].values())})
                 chart = alt.Chart(probs).mark_bar(cornerRadiusEnd=4, height=22).encode(
                     x=alt.X("Probability:Q", scale=alt.Scale(domain=[0, 1]), axis=alt.Axis(format="%")),
-                    y=alt.Y("Class:N", sort=list(COLORS), title=None),
+                    y=alt.Y("Class:N", sort=list(COLORS), title=None, axis=alt.Axis(labelOverlap=False)),
                     color=alt.Color("Class:N", scale=COLOR_SCALE, legend=None),
                     tooltip=["Class", alt.Tooltip("Probability:Q", format=".1%")],
-                ).properties(height=130)
+                ).properties(height=170)
                 st.altair_chart(chart, width="stretch")
                 st.info(res["advice"])
             else:
