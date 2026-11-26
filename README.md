@@ -6,7 +6,7 @@ with retraining triggers, Docker/cloud deployment and load testing with Locust.
 
 | | |
 |---|---|
-|  **Video demo** | _YouTube link — add here_ |
+|  **Video demo** | https://youtu.be/-Q7L6LEihro |
 | **Web app (UI)** | https://bean-disease-ui.onrender.com (Render) |
 | **API + Swagger docs** | https://bean-disease-api-c7f7e4ezcvbccae0.southafricanorth-01.azurewebsites.net/docs (Azure App Service) |
 | **Notebook** | [notebook/bean_disease_classification.ipynb](notebook/bean_disease_classification.ipynb) |
